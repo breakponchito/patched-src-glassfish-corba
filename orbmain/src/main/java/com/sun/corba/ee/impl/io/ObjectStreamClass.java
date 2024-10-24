@@ -516,7 +516,6 @@ public class ObjectStreamClass implements java.io.Serializable {
                                 try {
                                     Field reflField = cl.getDeclaredField(fields[j].getName());
                                     if (fields[j].getType() == reflField.getType()) {
-                                        reflField.setAccessible(true);
                                         fields[j].setField(reflField);
                                     } else {
                                         Exceptions.self.fieldTypeMismatch(
