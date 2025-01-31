@@ -37,7 +37,7 @@
  * only if the new code is made subject to such option by the copyright
  * holder.
  */
-// Portions Copyright [2016] [Payara Foundation and/or its affiliates]
+// Portions Copyright [2016-2025] [Payara Foundation and/or its affiliates]
 
 package com.sun.corba.ee.impl.protocol;
 
@@ -50,6 +50,8 @@ import java.util.Iterator;
 import java.util.Queue;
 
 import com.sun.corba.ee.impl.protocol.giopmsgheaders.*;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.omg.CORBA.Any;
 import org.omg.CORBA.CompletionStatus;
 import org.omg.CORBA.ExceptionList;
@@ -114,18 +116,10 @@ import org.glassfish.pfl.tf.spi.annotation.InfoMethod;
  */
 @Subcontract
 @Transport
-public class MessageMediatorImpl
-    implements 
-        MessageMediator,
-        ProtocolHandler,
-        MessageHandler,
-        Work
-{
-    protected static final ORBUtilSystemException wrapper =
-        ORBUtilSystemException.self ;
-    protected static final InterceptorsSystemException interceptorWrapper =
-        InterceptorsSystemException.self ;
-
+public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, MessageHandler, Work {
+    private static final Logger logger = Logger.getLogger(MessageMediatorImpl.class.getName());
+    protected static final ORBUtilSystemException wrapper = ORBUtilSystemException.self;
+    protected static final InterceptorsSystemException interceptorWrapper = InterceptorsSystemException.self;
     protected ORB orb;
     protected ContactInfo contactInfo;
     protected Connection connection;
@@ -153,7 +147,7 @@ public class MessageMediatorImpl
 
     // The localMaxVersion is used for caching the value of 
     //MaxStreamFormatVersion if the ORB has been created by the app server  
-    private static byte localMaxVersion =  ORBUtility.getMaxStreamFormatVersion();
+    private static byte localMaxVersion = ORBUtility.getMaxStreamFormatVersion();
 
     // time this CorbaMessageMediator (Work) was added to a WorkQueue.
     private long enqueueTime;
@@ -161,23 +155,13 @@ public class MessageMediatorImpl
     //
     // Client-side constructor.
     //
-    public MessageMediatorImpl(ORB orb,
-                                    ContactInfo contactInfo,
-                                    Connection connection,
-                                    GIOPVersion giopVersion,
-                                    IOR ior,
-                                    int requestId,
-                                    short addrDisposition,
-                                    String operationName,
-                                    boolean isOneWay)
-    {
-        this( orb, connection ) ;
-            
+    public MessageMediatorImpl(ORB orb, ContactInfo contactInfo, Connection connection, GIOPVersion giopVersion,
+                               IOR ior, int requestId, short addrDisposition, String operationName, boolean isOneWay) {
+        this(orb, connection);
         this.contactInfo = contactInfo;
         this.addrDisposition = addrDisposition;
 
-        streamFormatVersion = getStreamFormatVersionForThisRequest(
-            this.contactInfo.getEffectiveTargetIOR(), giopVersion);
+        streamFormatVersion = getStreamFormatVersionForThisRequest(this.contactInfo.getEffectiveTargetIOR(), giopVersion);
 
         /* Assuming streamFormatVersion can be set to 2 here
          * here breaks interoperability
@@ -190,22 +174,21 @@ public class MessageMediatorImpl
 
         streamFormatVersionSet = true;
 
-        byte encodingVersion =
-            ORBUtility.chooseEncodingVersion(orb, ior, giopVersion);
+        byte encodingVersion = ORBUtility.chooseEncodingVersion(orb, ior, giopVersion);
         ORBUtility.pushEncVersionToThreadLocalState(encodingVersion);
-        requestHeader = MessageBase.createRequest(this.orb, giopVersion,
-            encodingVersion, requestId, !isOneWay,
-            this.contactInfo.getEffectiveTargetIOR(), this.addrDisposition,
-            operationName,
-            ServiceContextDefaults.makeServiceContexts(orb), null);
+        requestHeader = MessageBase.createRequest(this.orb, giopVersion, encodingVersion, requestId, !isOneWay,
+                this.contactInfo.getEffectiveTargetIOR(), this.addrDisposition,
+                operationName, ServiceContextDefaults.makeServiceContexts(orb), null);
     }
 
     //
     // Acceptor constructor.
     //
-    private MessageMediatorImpl(ORB orb,
-                                    Connection connection)
-    {
+    private MessageMediatorImpl(ORB orb, Connection connection) {
+        if (logger.isLoggable(Level.FINE)) {
+            logger.log(Level.FINE, "MessageMediatorImpl creation with connection={0} and orb={1}",
+                    new Object[]{connection, orb});
+        }
         this.orb = orb;
         this.connection = connection;
     }
@@ -217,12 +200,8 @@ public class MessageMediatorImpl
     // Note: in some cases (e.g., a reply message) this message 
     // mediator will only be used for dispatch.  Then the original 
     // request side mediator will take over. 
-    public MessageMediatorImpl(ORB orb,
-                                    Connection connection,
-                                    Message dispatchHeader,
-                                    ByteBuffer byteBuffer)
-    {
-        this( orb, connection ) ;
+    public MessageMediatorImpl(ORB orb, Connection connection, Message dispatchHeader, ByteBuffer byteBuffer) {
+        this(orb, connection);
         this.dispatchHeader = dispatchHeader;
         this.dispatchByteBuffer = byteBuffer;
     }
@@ -499,6 +478,9 @@ public class MessageMediatorImpl
             try {
                 InetSocketAddress connAddr = (InetSocketAddress) connection.getSocketChannel().getLocalAddress();
                 IIOPAddressImplLocalServer.setHostOverride(connAddr.getHostString());
+                if (logger.isLoggable(Level.FINE)) {
+                    logger.log(Level.FINE, "Connection information inetSocketAddress={0}", connAddr);
+                }
             }
             catch(IOException ex) {
                 throw wrapper.ioexceptionWhenReadingConnection(ex, connection);            
@@ -533,8 +515,7 @@ public class MessageMediatorImpl
         return true;
     }
 
-    public byte getStreamFormatVersion()
-    {
+    public byte getStreamFormatVersion() {
         // REVISIT: ContactInfo/Acceptor output object factories
         // just use this.  Maybe need to distinguish:
         //    createOutputObjectForRequest
@@ -710,6 +691,9 @@ public class MessageMediatorImpl
             dispatchHeader.callback(this);
         } catch (IOException e) {
             // REVISIT - this should be handled internally.
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE, "IOException with following message=", e.getMessage());
+            }
         } finally {
             ORBUtility.popEncVersionFromThreadLocalState();
         }
@@ -730,16 +714,20 @@ public class MessageMediatorImpl
 
     @Transport
     private void resumeOptimizedReadProcessing(Message message) {
-        messageInfo( message, message.getCorbaRequestId() ) ;
+        messageInfo(message, message.getCorbaRequestId());
         connectionInfo(connection);
 
         if (message.moreFragmentsToFollow()) {
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE,
+                        "Processing more fragments for message={0} fro threadID={1}",
+                        new Object[]{message, Thread.currentThread().getId()});
+            }
             generalMessage("getting next fragment");
 
             MessageMediator messageMediator = null;
             RequestId requestId = message.getCorbaRequestId();
-            Queue<MessageMediator> queue =
-                connection.getFragmentList(requestId);
+            Queue<MessageMediator> queue = connection.getFragmentList(requestId);
 
             // REVISIT - In the future, the synchronized(queue),
             // wait()/notify() construct should be replaced
@@ -751,13 +739,33 @@ public class MessageMediatorImpl
             // the synchronized(queue), wait(), notify()
             // implementation.
             synchronized (queue) {
+                if (logger.isLoggable(Level.FINE)) {
+                    logger.log(Level.FINE,
+                            "Thread accessing synchronized block, threadID={0} with requestId={1} and queue reference={2} and connection={3}",
+                            new Object[]{Thread.currentThread().getId(), requestId, queue.size() > 0 ? queue.element() : "", connection});
+                }
                 while (messageMediator == null) {
                     if (queue.size() > 0) {
                         messageMediator = queue.poll();
+                        if (logger.isLoggable(Level.FINE)) {
+                            logger.log(Level.FINE, "Current messageMediator={0} for threadID={1}",
+                                    new Object[]{messageMediator, Thread.currentThread().getId()});
+                        }
                     } else {
                         try {
+                            if (logger.isLoggable(Level.FINE)) {
+                                logger.log(Level.FINE,
+                                        "Starting to wait until available messageMediator on queue, threadID={0} " +
+                                                "and queue reference={1}",
+                                        new Object[]{Thread.currentThread().getId(), queue});
+                            }
                             queue.wait();
                         } catch (InterruptedException ex) {
+                            if (logger.isLoggable(Level.FINE)) {
+                                logger.log(Level.FINE, "Throwing InterruptedException with following message={0} " +
+                                                "for threadID={1}",
+                                        new Object[]{ex.getMessage(), Thread.currentThread().getId()});
+                            }
                             wrapper.resumeOptimizedReadThreadInterrupted(ex);
                         }
                     }
@@ -772,15 +780,23 @@ public class MessageMediatorImpl
             // thread is done processing the Work it was given, it is very likely
             // it will be the thread that executes the Work (messageMediator)we
             // put the on the WorkQueue here.
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE, "Before to add messageMediator={0} to the queue={1} for threadID={2}",
+                        new Object[]{messageMediator, queue, Thread.currentThread().getId()});
+            }
             addMessageMediatorToWorkQueue(messageMediator);
         } else {
-            if (message.getType() == Message.GIOPFragment || 
-                message.getType() == Message.GIOPCancelRequest) {
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE, "No fragments to follow, continue with single processing for message={0} and threadID={1}",
+                        new Object[]{message, Thread.currentThread().getId()});
+            }
+            if (message.getType() == Message.GIOPFragment ||
+                    message.getType() == Message.GIOPCancelRequest) {
                 // applies to FragmentMessage_1_[1|2] and CancelRequestMessage
                 // when using non-blocking NIO SocketChannels
                 RequestId requestId = message.getCorbaRequestId();
                 generalMessage(
-                    "done processing fragments (removing fragment list)" );
+                        "done processing fragments (removing fragment list)");
                 connection.removeFragmentList(requestId);
             }
         }
@@ -793,22 +809,40 @@ public class MessageMediatorImpl
     private void addMessageMediatorToWorkQueue(final MessageMediator messageMediator) {
         // Add messageMediator to work queue
         Throwable throwable = null;
-        int poolToUse = -1 ;
+        int poolToUse = -1;
         try {
             poolToUse = messageMediator.getThreadPoolToUse();
-            poolToUseInfo( poolToUse ) ;
+            poolToUseInfo(poolToUse);
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE, "Getting pool={0} to add messageMediator{1} for threadID={2}",
+                        new Object[]{poolToUse, messageMediator, Thread.currentThread().getId()});
+            }
             orb.getThreadPoolManager().getThreadPool(poolToUse).getWorkQueue(0).
-                             addWork((MessageMediatorImpl)messageMediator);
+                    addWork((MessageMediatorImpl) messageMediator);
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE, "After adding messageMediator{0} for pool={1} with threadID={2}",
+                        new Object[]{messageMediator, poolToUse, Thread.currentThread().getId()});
+            }
         } catch (NoSuchThreadPoolException e) {
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE, "Throwing NoSuchThreadPoolException with following message={0} " +
+                                "for threadID={1}",
+                        new Object[]{e.getMessage(), Thread.currentThread().getId()});
+            }
             throwable = e;
         } catch (NoSuchWorkQueueException e) {
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE, "Throwing NoSuchWorkQueueException with following message={0} " +
+                                "for threadID={1}",
+                        new Object[]{e.getMessage(), Thread.currentThread().getId()});
+            }
             throwable = e;
         }
 
         // REVISIT: need to close connection?
         if (throwable != null) {
             reportException("exception from thread pool", throwable);
-            throw wrapper.noSuchThreadpoolOrQueue(throwable, poolToUse );
+            throw wrapper.noSuchThreadpoolOrQueue(throwable, poolToUse);
         }
     }
 
