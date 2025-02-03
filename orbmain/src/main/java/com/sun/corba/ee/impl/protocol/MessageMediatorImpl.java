@@ -752,23 +752,23 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
                     if (queue.size() > 0) {
                         messageMediator = queue.poll();
                         if (logger.isLoggable(Level.FINE)) {
-                            logger.log(Level.FINE, "Current messageMediator={0} for threadID={1}, threadName={2}",
-                                    new Object[]{messageMediator, Thread.currentThread().getId(), Thread.currentThread().getName()});
+                            logger.log(Level.FINE, "Current messageMediator={0} for threadID={1}, threadName={2}, with requestId={3}",
+                                    new Object[]{messageMediator, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
                         }
                     } else {
                         try {
                             if (logger.isLoggable(Level.FINE)) {
                                 logger.log(Level.FINE,
                                         "Starting to wait until available messageMediator on queue, threadID={0}, threadName={1} " +
-                                                "and queue reference={2}",
-                                        new Object[]{Thread.currentThread().getId(), Thread.currentThread().getName(), queue});
+                                                "and queue reference={2}, with requestId={3}",
+                                        new Object[]{Thread.currentThread().getId(), Thread.currentThread().getName(), queue, requestId});
                             }
-                            queue.wait();
+                            queue.wait(1000);
                         } catch (InterruptedException ex) {
                             if (logger.isLoggable(Level.FINE)) {
                                 logger.log(Level.FINE, "Throwing InterruptedException with following message={0} " +
-                                                "for threadID={1}, threadName={2}",
-                                        new Object[]{ex.getMessage(), Thread.currentThread().getId(), Thread.currentThread().getName()});
+                                                "for threadID={1}, threadName={2}, , with requestId={3}",
+                                        new Object[]{ex.getMessage(), Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
                             }
                             wrapper.resumeOptimizedReadThreadInterrupted(ex);
                         }
@@ -785,10 +785,10 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
             // it will be the thread that executes the Work (messageMediator)we
             // put the on the WorkQueue here.
             if (logger.isLoggable(Level.FINE)) {
-                logger.log(Level.FINE, "Before to add messageMediator={0} to the queue={1} for threadID={2}, threadName={3}",
-                        new Object[]{messageMediator, queue, Thread.currentThread().getId(), Thread.currentThread().getName()});
+                logger.log(Level.FINE, "Before to add messageMediator={0} to the queue={1} for threadID={2}, threadName={3}, with requestId={3}",
+                        new Object[]{messageMediator, queue, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
             }
-            addMessageMediatorToWorkQueue(messageMediator);
+            addMessageMediatorToWorkQueue(messageMediator, requestId.toString());
         } else {
             if (logger.isLoggable(Level.FINE)) {
                 logger.log(Level.FINE, "No fragments to follow, continue with single processing for message={0} " +
@@ -811,7 +811,7 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
     private void poolToUseInfo( int id ) { }
 
     @Transport
-    private void addMessageMediatorToWorkQueue(final MessageMediator messageMediator) {
+    private void addMessageMediatorToWorkQueue(final MessageMediator messageMediator, final String requestId) {
         // Add messageMediator to work queue
         Throwable throwable = null;
         int poolToUse = -1;
@@ -819,27 +819,28 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
             poolToUse = messageMediator.getThreadPoolToUse();
             poolToUseInfo(poolToUse);
             if (logger.isLoggable(Level.FINE)) {
-                logger.log(Level.FINE, "Getting pool={0} to add messageMediator{1} for threadID={2}, theadName={3}",
-                        new Object[]{poolToUse, messageMediator, Thread.currentThread().getId(), Thread.currentThread().getName()});
+                logger.log(Level.FINE, "Adding messageMediator to pool={0} to add messageMediator{1} for threadID={2}, theadName={3}, requestId={4}",
+                        new Object[]{poolToUse, messageMediator, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
             }
             orb.getThreadPoolManager().getThreadPool(poolToUse).getWorkQueue(0).
                     addWork((MessageMediatorImpl) messageMediator);
             if (logger.isLoggable(Level.FINE)) {
-                logger.log(Level.FINE, "After adding messageMediator{0} for pool={1} with threadID={2}, theadName={3}",
-                        new Object[]{messageMediator, poolToUse, Thread.currentThread().getId(), Thread.currentThread().getName()});
+                logger.log(Level.FINE, "After adding messageMediator{0} for pool={1} with threadID={2}, theadName={3}, requestId={4}",
+                        new Object[]{messageMediator, poolToUse, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
             }
+            Thread.currentThread().notifyAll();
         } catch (NoSuchThreadPoolException e) {
             if (logger.isLoggable(Level.FINE)) {
                 logger.log(Level.FINE, "Throwing NoSuchThreadPoolException with following message={0} " +
-                                "for threadID={1}, theadName={2}",
-                        new Object[]{e.getMessage(), Thread.currentThread().getId(), Thread.currentThread().getName()});
+                                "for threadID={1}, theadName={2}, requestId={3}",
+                        new Object[]{e.getMessage(), Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
             }
             throwable = e;
         } catch (NoSuchWorkQueueException e) {
             if (logger.isLoggable(Level.FINE)) {
                 logger.log(Level.FINE, "Throwing NoSuchWorkQueueException with following message={0} " +
-                                "for threadID={1}, threadName={2}",
-                        new Object[]{e.getMessage(), Thread.currentThread().getId(), Thread.currentThread().getName()});
+                                "for threadID={1}, threadName={2}, requestId={3}",
+                        new Object[]{e.getMessage(), Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
             }
             throwable = e;
         }
