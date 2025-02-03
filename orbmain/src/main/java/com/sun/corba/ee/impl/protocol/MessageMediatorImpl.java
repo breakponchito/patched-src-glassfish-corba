@@ -819,13 +819,13 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
             poolToUse = messageMediator.getThreadPoolToUse();
             poolToUseInfo(poolToUse);
             if (logger.isLoggable(Level.FINE)) {
-                logger.log(Level.FINE, "Adding messageMediator to pool={0} to add messageMediator{1} for threadID={2}, theadName={3}, requestId={4}",
-                        new Object[]{poolToUse, messageMediator, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
+                logger.log(Level.FINE, "Adding messageMediator={0} to pool={1} with threadID={2}, theadName={3}, requestId={4}",
+                        new Object[]{messageMediator, poolToUse, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
             }
             orb.getThreadPoolManager().getThreadPool(poolToUse).getWorkQueue(0).
                     addWork((MessageMediatorImpl) messageMediator);
             if (logger.isLoggable(Level.FINE)) {
-                logger.log(Level.FINE, "After adding messageMediator{0} for pool={1} with threadID={2}, theadName={3}, requestId={4}",
+                logger.log(Level.FINE, "After adding messageMediator={0} to pool={1} with threadID={2}, theadName={3}, requestId={4}",
                         new Object[]{messageMediator, poolToUse, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
             }
             Thread.currentThread().notifyAll();
