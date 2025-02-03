@@ -775,7 +775,6 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
                     }
                 }
             }
-
             // Add CorbaMessageMediator to ThreadPool's WorkQueue to process the
             // next fragment.
             // Although we could call messageMeditor.doWork() rather than putting
@@ -785,8 +784,8 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
             // it will be the thread that executes the Work (messageMediator)we
             // put the on the WorkQueue here.
             if (logger.isLoggable(Level.FINE)) {
-                logger.log(Level.FINE, "Before to add messageMediator={0} to the queue={1} for threadID={2}, threadName={3}, with requestId={3}",
-                        new Object[]{messageMediator, queue, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
+                logger.log(Level.FINE, "Before to add messageMediator={0}, threadID={1}, threadName={2}, with requestId={3}",
+                        new Object[]{messageMediator, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
             }
             addMessageMediatorToWorkQueue(messageMediator, requestId.toString());
         } else {
