@@ -50,6 +50,9 @@ import java.util.Iterator;
 import java.util.Queue;
 
 import com.sun.corba.ee.impl.protocol.giopmsgheaders.*;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import org.omg.CORBA.Any;
@@ -120,6 +123,8 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
     private static final Logger logger = Logger.getLogger(MessageMediatorImpl.class.getName());
     protected static final ORBUtilSystemException wrapper = ORBUtilSystemException.self;
     protected static final InterceptorsSystemException interceptorWrapper = InterceptorsSystemException.self;
+    private static final String ENABLING_NEW_FRAGMENT_CONCURRENCY_IMPL = "org.sun.corba.ee.impl.protocol.ENABLING_NEW_FRAGMENT_CONCURRENCY_IMPL";
+    private static final boolean isNewFragmentImplSet = Boolean.parseBoolean(System.getProperty(ENABLING_NEW_FRAGMENT_CONCURRENCY_IMPL) == null ? "false" : System.getProperty(ENABLING_NEW_FRAGMENT_CONCURRENCY_IMPL));
     protected ORB orb;
     protected ContactInfo contactInfo;
     protected Connection connection;
@@ -152,6 +157,8 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
     // time this CorbaMessageMediator (Work) was added to a WorkQueue.
     private long enqueueTime;
 
+    private ReentrantLock lock = new ReentrantLock();
+    private Condition queueEmptyCondition = lock.newCondition();
     //
     // Client-side constructor.
     //
@@ -185,11 +192,6 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
     // Acceptor constructor.
     //
     private MessageMediatorImpl(ORB orb, Connection connection) {
-        if (logger.isLoggable(Level.FINE)) {
-            logger.log(Level.FINE, "MessageMediatorImpl creation with connection={0} " +
-                            "and orb={1} and threadID={2} and threadName={3}",
-                    new Object[]{connection, orb, Thread.currentThread().getId(), Thread.currentThread().getName()});
-        }
         this.orb = orb;
         this.connection = connection;
     }
@@ -720,74 +722,10 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
         messageInfo(message, message.getCorbaRequestId());
         connectionInfo(connection);
 
-        if (message.moreFragmentsToFollow()) {
-            if (logger.isLoggable(Level.FINE)) {
-                logger.log(Level.FINE,
-                        "Processing more fragments for message={0} for threadID={1}, threadName={2}",
-                        new Object[]{message, Thread.currentThread().getId(), Thread.currentThread().getName()});
-            }
-            generalMessage("getting next fragment");
-
-            MessageMediator messageMediator = null;
-            RequestId requestId = message.getCorbaRequestId();
-            Queue<MessageMediator> queue = connection.getFragmentList(requestId);
-
-            // REVISIT - In the future, the synchronized(queue),
-            // wait()/notify() construct should be replaced
-            // with something like a LinkedBlockingQueue
-            // from java.util.concurrent using its offer()
-            // and poll() methods.  But, at the time of the
-            // writing of this code, a LinkedBlockingQueue
-            // implementation is not performing as well as
-            // the synchronized(queue), wait(), notify()
-            // implementation.
-            synchronized (queue) {
-                if (logger.isLoggable(Level.FINE)) {
-                    logger.log(Level.FINE,
-                            "Thread accessing synchronized block, threadID={0}, threadName={1} with requestId={2} and queue reference={3} and connection={4}",
-                            new Object[]{Thread.currentThread().getId(), Thread.currentThread().getName(), 
-                                    requestId, queue.size() > 0 ? queue.element() : "", connection});
-                }
-                while (messageMediator == null) {
-                    if (queue.size() > 0) {
-                        messageMediator = queue.poll();
-                        if (logger.isLoggable(Level.FINE)) {
-                            logger.log(Level.FINE, "Current messageMediator={0} for threadID={1}, threadName={2}, with requestId={3}",
-                                    new Object[]{messageMediator, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
-                        }
-                    } else {
-                        try {
-                            if (logger.isLoggable(Level.FINE)) {
-                                logger.log(Level.FINE,
-                                        "Starting to wait until available messageMediator on queue, threadID={0}, threadName={1} " +
-                                                "and queue reference={2}, with requestId={3}",
-                                        new Object[]{Thread.currentThread().getId(), Thread.currentThread().getName(), queue, requestId});
-                            }
-                            queue.wait(1000);
-                        } catch (InterruptedException ex) {
-                            if (logger.isLoggable(Level.FINE)) {
-                                logger.log(Level.FINE, "Throwing InterruptedException with following message={0} " +
-                                                "for threadID={1}, threadName={2}, , with requestId={3}",
-                                        new Object[]{ex.getMessage(), Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
-                            }
-                            wrapper.resumeOptimizedReadThreadInterrupted(ex);
-                        }
-                    }
-                }
-            }
-            // Add CorbaMessageMediator to ThreadPool's WorkQueue to process the
-            // next fragment.
-            // Although we could call messageMeditor.doWork() rather than putting
-            // the messageMediator on the WorkQueue, we do not because calling
-            // doWork() would increase the depth of the call stack. Since this
-            // thread is done processing the Work it was given, it is very likely
-            // it will be the thread that executes the Work (messageMediator)we
-            // put the on the WorkQueue here.
-            if (logger.isLoggable(Level.FINE)) {
-                logger.log(Level.FINE, "Before to add messageMediator={0}, threadID={1}, threadName={2}, with requestId={3}",
-                        new Object[]{messageMediator, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
-            }
-            addMessageMediatorToWorkQueue(messageMediator, requestId.toString());
+        if (message.moreFragmentsToFollow() && !isNewFragmentImplSet) {
+            legacySyncronizedProcess(message);
+        } else if (message.moreFragmentsToFollow() && isNewFragmentImplSet) {
+            newLockProcess(message);
         } else {
             if (logger.isLoggable(Level.FINE)) {
                 logger.log(Level.FINE, "No fragments to follow, continue with single processing for message={0} " +
@@ -803,6 +741,137 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
                         "done processing fragments (removing fragment list)");
                 connection.removeFragmentList(requestId);
             }
+        }
+    }
+
+    private void legacySyncronizedProcess(Message message) {
+        if (logger.isLoggable(Level.FINE)) {
+            logger.log(Level.FINE,
+                    "Processing more fragments using legacy synchronized method for message={0} for threadID={1}, threadName={2}",
+                    new Object[]{message, Thread.currentThread().getId(), Thread.currentThread().getName()});
+        }
+        generalMessage("getting next fragment");
+
+        MessageMediator messageMediator = null;
+        RequestId requestId = message.getCorbaRequestId();
+        Queue<MessageMediator> queue = connection.getFragmentList(requestId);
+
+        // REVISIT - In the future, the synchronized(queue),
+        // wait()/notify() construct should be replaced
+        // with something like a LinkedBlockingQueue
+        // from java.util.concurrent using its offer()
+        // and poll() methods.  But, at the time of the
+        // writing of this code, a LinkedBlockingQueue
+        // implementation is not performing as well as
+        // the synchronized(queue), wait(), notify()
+        // implementation.
+        synchronized (queue) {
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE,
+                        "Thread accessing synchronized block, threadID={0}, threadName={1} with requestId={2} and queue reference={3} and connection={4}",
+                        new Object[]{Thread.currentThread().getId(), Thread.currentThread().getName(),
+                                requestId, queue.size() > 0 ? queue.element() : "", connection});
+            }
+            while (messageMediator == null) {
+                if (queue.size() > 0) {
+                    messageMediator = queue.poll();
+                } else {
+                    try {
+                        if (logger.isLoggable(Level.FINE)) {
+                            logger.log(Level.FINE,
+                                    "Starting to wait until available messageMediator on queue, threadID={0}, threadName={1} " +
+                                            "and queue reference={2}, with requestId={3}",
+                                    new Object[]{Thread.currentThread().getId(), Thread.currentThread().getName(), queue, requestId});
+                        }
+                        queue.wait();
+                    } catch (InterruptedException ex) {
+                        if (logger.isLoggable(Level.FINE)) {
+                            logger.log(Level.FINE, "Throwing InterruptedException with following message={0} " +
+                                            "for threadID={1}, threadName={2}, , with requestId={3}",
+                                    new Object[]{ex.getMessage(), Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
+                        }
+                        wrapper.resumeOptimizedReadThreadInterrupted(ex);
+                    }
+                }
+            }
+        }
+        // Add CorbaMessageMediator to ThreadPool's WorkQueue to process the
+        // next fragment.
+        // Although we could call messageMeditor.doWork() rather than putting
+        // the messageMediator on the WorkQueue, we do not because calling
+        // doWork() would increase the depth of the call stack. Since this
+        // thread is done processing the Work it was given, it is very likely
+        // it will be the thread that executes the Work (messageMediator)we
+        // put the on the WorkQueue here.
+        if (logger.isLoggable(Level.FINE)) {
+            logger.log(Level.FINE, "Before to add messageMediator={0}, threadID={1}, threadName={2}, with requestId={3}",
+                    new Object[]{messageMediator, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
+        }
+        addMessageMediatorToWorkQueue(messageMediator, requestId.toString());
+    }
+
+    private void newLockProcess(Message message) {
+        if (logger.isLoggable(Level.FINE)) {
+            logger.log(Level.FINE,
+                    "Processing more fragments using new lock method for message={0} for threadID={1}, threadName={2}",
+                    new Object[]{message, Thread.currentThread().getId(), Thread.currentThread().getName()});
+        }
+        generalMessage("getting next fragment");
+
+        MessageMediator messageMediator = null;
+        RequestId requestId = message.getCorbaRequestId();
+        try {
+            boolean queueStillEmpty = true;
+            lock.lock();
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE, 
+                        "Lock acquired for threadId={0}, threadName={1} with requestId={2}", 
+                        new Object[] { Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
+            }
+            Queue<MessageMediator> queue = connection.getFragmentList(requestId);
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE,
+                        "Thread accessing locked block, threadID={0}, threadName={1} with requestId={2} and queue size={3} and connection={4}",
+                        new Object[]{Thread.currentThread().getId(), Thread.currentThread().getName(),
+                                requestId, queue.size() > 0 ? queue.size() : "", connection});
+            }
+            
+            while (messageMediator == null) {
+                if (queue.size() > 0) {
+                    messageMediator = queue.poll();
+                } else {
+                    if(!queueStillEmpty){
+                       break;
+                    }
+                    queueStillEmpty = queueEmptyCondition.await(1000, TimeUnit.MILLISECONDS);
+                }
+            }
+        } catch (InterruptedException e) {
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE, "Throwing interrupted exception for threadId={0} and requestId={1}", 
+                        new Object[] {Thread.currentThread().getId(), requestId});
+            }
+        } finally {
+            lock.unlock();
+            if (logger.isLoggable(Level.FINE)) {
+                logger.log(Level.FINE, "Leaving the lock from MessageMediator with Fragments for threadId={0} and requestId={1}", 
+                        new Object[] {Thread.currentThread().getId(), requestId});
+            }
+        }
+        // Add CorbaMessageMediator to ThreadPool's WorkQueue to process the
+        // next fragment.
+        // Although we could call messageMeditor.doWork() rather than putting
+        // the messageMediator on the WorkQueue, we do not because calling
+        // doWork() would increase the depth of the call stack. Since this
+        // thread is done processing the Work it was given, it is very likely
+        // it will be the thread that executes the Work (messageMediator)we
+        // put the on the WorkQueue here.
+        if (logger.isLoggable(Level.FINE)) {
+            logger.log(Level.FINE, "Before to add messageMediator={0}, threadID={1}, threadName={2}, with requestId={3}",
+                    new Object[]{messageMediator, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
+        }
+        if (messageMediator != null) {
+            addMessageMediatorToWorkQueue(messageMediator, requestId.toString());
         }
     }
 
@@ -827,7 +896,6 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
                 logger.log(Level.FINE, "After adding messageMediator={0} to pool={1} with threadID={2}, theadName={3}, requestId={4}",
                         new Object[]{messageMediator, poolToUse, Thread.currentThread().getId(), Thread.currentThread().getName(), requestId});
             }
-            Thread.currentThread().notifyAll();
         } catch (NoSuchThreadPoolException e) {
             if (logger.isLoggable(Level.FINE)) {
                 logger.log(Level.FINE, "Throwing NoSuchThreadPoolException with following message={0} " +
