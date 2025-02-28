@@ -123,12 +123,12 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
     private static final Logger logger = Logger.getLogger(MessageMediatorImpl.class.getName());
     protected static final ORBUtilSystemException wrapper = ORBUtilSystemException.self;
     protected static final InterceptorsSystemException interceptorWrapper = InterceptorsSystemException.self;
-    private static final String ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS = "fish.payara.corba.protocol.enablingNewFragmentProcess";
+    private static final String ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS = "com.sun.corba.ee.protocol.enablingNewFragmentProcess";
     private static final int DEFAULT_NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT = 10000;
     private static final boolean isNewFragmentProcessingSet = 
             Boolean.parseBoolean(System.getProperty(ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS) == null ? "false" : 
                     System.getProperty(ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS));
-    private static final String NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT = "fish.payara.corba.protocol.newFragmentEmptyConditionTimeout";
+    private static final String NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT = "com.sun.corba.ee.protocol.newFragmentEmptyConditionTimeout";
     private static final int newFragmentEmptyConditionTimeout = 
             System.getProperty(NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT) == null ? DEFAULT_NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT : 
                     Integer.parseInt(System.getProperty(NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT));
@@ -729,10 +729,12 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
         messageInfo(message, message.getCorbaRequestId());
         connectionInfo(connection);
 
-        if (message.moreFragmentsToFollow() && !isNewFragmentProcessingSet) {
-            synchronizedProcess(message);
-        } else if (message.moreFragmentsToFollow() && isNewFragmentProcessingSet) {
-            lockProcess(message);
+        if (message.moreFragmentsToFollow()) {
+            if (!isNewFragmentProcessingSet) {
+                synchronizedProcess(message);
+            } else {
+                lockProcess(message);
+            }
         } else {
             if (logger.isLoggable(Level.FINE)) {
                 logger.log(Level.FINE, "No fragments to follow, continue with single processing for message={0} " +
@@ -842,13 +844,13 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
                         new Object[]{Thread.currentThread().getId(), Thread.currentThread().getName(),
                                 requestId, queue.size() > 0 ? queue.size() : "", connection});
             }
-            
+
             while (messageMediator == null) {
                 if (queue.size() > 0) {
                     messageMediator = queue.poll();
                 } else {
-                    if(!queueStillEmpty){
-                       break;
+                    if (!queueStillEmpty) {
+                        break;
                     }
                     queueStillEmpty = queueEmptyCondition.await(newFragmentEmptyConditionTimeout, TimeUnit.MILLISECONDS);
                 }
