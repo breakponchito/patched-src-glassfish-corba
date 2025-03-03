@@ -617,6 +617,10 @@ public class ORBConstants {
     // ORB's gmbal root.
     public static final String GMBAL_ROOT_PARENT_NAME = SUN_PREFIX 
         + "ORBGmbalRootParentName" ;
+    
+    //protocol constants to enable new lock api mechanism to process fragments 
+    public static final String ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS = SUN_PREFIX + "protocol.enablingNewFragmentProcess";
+    public static final String NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT = SUN_PREFIX + "protocol.newFragmentEmptyConditionTimeout";
 }
 
 // End of file.
