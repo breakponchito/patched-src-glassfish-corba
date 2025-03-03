@@ -17,6 +17,8 @@
  * Classpath-exception-2.0
  */
 
+// Portions Copyright [2025] [Payara Foundation and/or its affiliates]
+
 package com.sun.corba.ee.spi.misc;
 
 import com.sun.corba.ee.org.omg.CORBA.SUNVMCID ;
