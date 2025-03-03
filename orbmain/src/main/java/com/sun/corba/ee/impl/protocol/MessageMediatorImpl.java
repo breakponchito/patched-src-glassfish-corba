@@ -123,15 +123,13 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
     private static final Logger logger = Logger.getLogger(MessageMediatorImpl.class.getName());
     protected static final ORBUtilSystemException wrapper = ORBUtilSystemException.self;
     protected static final InterceptorsSystemException interceptorWrapper = InterceptorsSystemException.self;
-    private static final String ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS = "com.sun.corba.ee.protocol.enablingNewFragmentProcess";
     private static final int DEFAULT_NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT = 10000;
     private static final boolean isNewFragmentProcessingSet = 
-            Boolean.parseBoolean(System.getProperty(ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS) == null ? "false" : 
-                    System.getProperty(ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS));
-    private static final String NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT = "com.sun.corba.ee.protocol.newFragmentEmptyConditionTimeout";
+            Boolean.parseBoolean(System.getProperty(ORBConstants.ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS) == null ? "false" : 
+                    System.getProperty(ORBConstants.ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS));
     private static final int newFragmentEmptyConditionTimeout = 
-            System.getProperty(NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT) == null ? DEFAULT_NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT : 
-                    Integer.parseInt(System.getProperty(NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT));
+            System.getProperty(ORBConstants.NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT) == null ? DEFAULT_NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT : 
+                    Integer.parseInt(System.getProperty(ORBConstants.NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT));
     protected ORB orb;
     protected ContactInfo contactInfo;
     protected Connection connection;
