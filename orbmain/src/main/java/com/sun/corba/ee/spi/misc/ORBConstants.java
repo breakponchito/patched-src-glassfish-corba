@@ -621,7 +621,7 @@ public class ORBConstants {
         + "ORBGmbalRootParentName" ;
     
     //protocol constants to enable new lock api mechanism to process fragments 
-    public static final String ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS = SUN_PREFIX + "protocol.enablingNewFragmentProcess";
+    public static final String ENABLE_NEW_FRAGMENT_CONCURRENCY_PROCESS = SUN_PREFIX + "protocol.enableNewFragmentProcess";
     public static final String NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT = SUN_PREFIX + "protocol.newFragmentEmptyConditionTimeout";
 }
 
