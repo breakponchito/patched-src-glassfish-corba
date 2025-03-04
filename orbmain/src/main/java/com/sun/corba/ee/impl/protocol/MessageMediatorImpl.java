@@ -104,8 +104,8 @@ public class MessageMediatorImpl implements MessageMediator, ProtocolHandler, Me
     protected static final InterceptorsSystemException interceptorWrapper = InterceptorsSystemException.self;
     private static final int DEFAULT_NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT = 10000;
     private static final boolean isNewFragmentProcessingSet = 
-            Boolean.parseBoolean(System.getProperty(ORBConstants.ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS) == null ? "false" : 
-                    System.getProperty(ORBConstants.ENABLING_NEW_FRAGMENT_CONCURRENCY_PROCESS));
+            Boolean.parseBoolean(System.getProperty(ORBConstants.ENABLE_NEW_FRAGMENT_CONCURRENCY_PROCESS) == null ? "false" :
+                    System.getProperty(ORBConstants.ENABLE_NEW_FRAGMENT_CONCURRENCY_PROCESS));
     private static final int newFragmentEmptyConditionTimeout = 
             System.getProperty(ORBConstants.NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT) == null ? DEFAULT_NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT : 
                     Integer.parseInt(System.getProperty(ORBConstants.NEW_FRAGMENT_EMPTY_CONDITION_TIMEOUT));
