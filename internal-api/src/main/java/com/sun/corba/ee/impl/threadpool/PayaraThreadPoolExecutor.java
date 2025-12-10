@@ -122,6 +122,121 @@ public class PayaraThreadPoolExecutor extends ThreadPoolExecutor {
             boolean offer(Runnable runnable, long l, TimeUnit timeUnit) throws InterruptedException;
         }
 
+        @Override
+        public int drainTo(Collection<? super Runnable> c) {
+            return delegate.drainTo(c);
+        }
+
+        @Override
+        public int drainTo(Collection<? super Runnable> c, int maxElements) {
+            return delegate.drainTo(c, maxElements);
+        }
+
+        @Override
+        public boolean contains(Object o) {
+            return delegate.contains(o);
+        }
+
+        @Override
+        public boolean remove(Object o) {
+            return delegate.remove(o);
+        }
+
+        @Override
+        public int remainingCapacity() {
+            return delegate.remainingCapacity();
+        }
+
+        @Override
+        public Runnable poll(long timeout, TimeUnit unit) throws InterruptedException {
+            return delegate.poll(timeout, unit);
+        }
+
+        @Override
+        public Runnable take() throws InterruptedException {
+            return delegate.take();
+        }
+
+        @Override
+        public void put(Runnable runnable) throws InterruptedException {
+            delegate.put(runnable);
+        }
+
+        @Override
+        public boolean add(Runnable runnable) {
+            return delegate.add(runnable);
+        }
+
+        @Override
+        public Runnable peek() {
+            return delegate.peek();
+        }
+
+        @Override
+        public Runnable element() {
+            return delegate.element();
+        }
+
+        @Override
+        public Runnable poll() {
+            return delegate.poll();
+        }
+
+        @Override
+        public Runnable remove() {
+            return delegate.remove();
+        }
+
+        @Override
+        public void clear() {
+            delegate.clear();
+        }
+
+        @Override
+        public boolean retainAll(Collection<?> c) {
+            return delegate.retainAll(c);
+        }
+
+        @Override
+        public boolean removeAll(Collection<?> c) {
+            return delegate.removeAll(c);
+        }
+
+        @Override
+        public boolean addAll(Collection<? extends Runnable> c) {
+            return delegate.addAll(c);
+        }
+
+        @Override
+        public boolean containsAll(Collection<?> c) {
+            return delegate.containsAll(c);
+        }
+
+        @Override
+        public <T> T[] toArray(T[] a) {
+            return delegate.toArray(a);
+        }
+
+        @Override
+        public Object[] toArray() {
+            return delegate.toArray();
+        }
+
+        @Override
+        public java.util.Iterator<Runnable> iterator() {
+            return delegate.iterator();
+        }
+
+        @Override
+        public boolean isEmpty() {
+            return delegate.isEmpty();
+        }
+
+        @Override
+        public int size() {
+            return delegate.size();
+        }
+
         private interface RunnableTransferQueue extends BlockingQueue<Runnable>, TransferQueue<Runnable>, Queue<Runnable>, Collection<Runnable> { }
 
         private final @Delegate(excludes = Excludes.class, types = RunnableTransferQueue.class) TransferQueue<Runnable> delegate = new LinkedTransferQueue<Runnable>();
